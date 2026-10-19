@@ -1,0 +1,64 @@
+{
+  "records": [
+    {
+      "projectId": "demo-axios-service",
+      "version": "1.14.1",
+      "sbomHash": "0x59b789a06168f4a26ededb83872d385ee8846e9c71cd70c01dbe6b70ba6f90fb",
+      "artifactPath": "apps/api/storage/sboms/demo-axios-service/1.14.1.json",
+      "artifactUri": "local://demo-axios-service/1.14.1.json",
+      "componentCount": 2,
+      "riskScore": 42,
+      "repo": "demo-axios-service",
+      "branch": "fixture",
+      "commit": "sbom-v3-axios-1.14.1",
+      "onChainStatus": "None",
+      "onChainMatch": false,
+      "createdAt": "2026-07-09T11:03:36.545Z"
+    },
+    {
+      "projectId": "demo-axios-service",
+      "version": "1.14.0",
+      "sbomHash": "0x95e4b3508971557482dccf098570ded586f69483bdbc8ae1c81a12bfa702ad7c",
+      "artifactPath": "apps/api/storage/sboms/demo-axios-service/1.14.0.json",
+      "artifactUri": "local://demo-axios-service/1.14.0.json",
+      "componentCount": 24,
+      "riskScore": 42,
+      "repo": "demo-axios-service",
+      "branch": "fixture",
+      "commit": "sbom-v3-axios-1.14.0",
+      "onChainStatus": "None",
+      "onChainMatch": false,
+      "createdAt": "2026-07-09T11:03:36.525Z"
+    },
+    {
+      "projectId": "demo-added-axios",
+      "version": "1.1.0-added-axios",
+      "sbomHash": "0xdcccfae15070598e0dc84c136f86a265602c248a92ba939564791cd2b3837ede",
+      "artifactPath": "apps/api/storage/sboms/demo-added-axios/1.1.0-added-axios.json",
+      "artifactUri": "local://demo-added-axios/1.1.0-added-axios.json",
+      "componentCount": 24,
+      "riskScore": 42,
+      "repo": "demo-added-axios",
+      "branch": "fixture",
+      "commit": "sbom-v2-added-axios",
+      "onChainStatus": "None",
+      "onChainMatch": false,
+      "createdAt": "2026-07-09T11:03:36.502Z"
+    },
+    {
+      "projectId": "demo-clean-app",
+      "version": "1.0.0-clean",
+      "sbomHash": "0xf72e2a46b3e00ba21d681813878e34fc828943422ee514f085e999e714fe8f9c",
+      "artifactPath": "apps/api/storage/sboms/demo-clean-app/1.0.0-clean.json",
+      "artifactUri": "local://demo-clean-app/1.0.0-clean.json",
+      "componentCount": 1,
+      "riskScore": 7,
+      "repo": "demo-clean-app",
+      "branch": "fixture",
+      "commit": "sbom-v1-clean",
+      "onChainStatus": "None",
+      "onChainMatch": false,
+      "createdAt": "2026-07-09T11:03:36.473Z"
+    }
+  ]
+}

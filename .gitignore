@@ -1,0 +1,32 @@
+node_modules/
+dist/
+.next/
+/bundle
+/artifacts
+/cache
+/types
+/coverage
+/.gas-snapshot
+/snapshots
+/pipeline-artifacts
+tsconfig.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+
+# API storage: only the three demo projects are tracked
+/apps/api/storage/sboms/*/
+!/apps/api/storage/sboms/demo-added-axios/
+!/apps/api/storage/sboms/demo-axios-service/
+!/apps/api/storage/sboms/demo-clean-app/
+
+# Labeled npm datasets contain real malware source. Build them locally,
+# never commit them.
+/test/fixtures/labeled-dataset*.json
+/test/fixtures/labeled-dataset*.json.bak-preenrich
+/test/fixtures/benign-hard-negatives.json
+/test/fixtures/benign-hard-negatives.json.bak-preenrich
+/test/fixtures/benign-representative.json
+# evaluation output
+/test/fixtures/eval-results*.json

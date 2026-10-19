@@ -1,0 +1,80 @@
+
+
+Latency benchmark (ms), network=sepolia chainId=11155111 contract=0x28E48122c40FB3F285b02FbB8A14DEB5B213b783 + live registry.npmjs.org calls
+====================================================================================================
+generateSbom (pnpm sbom --lockfile-only)                  runs=10      min=607.4      max=631.4     mean=617.0
+parseSBOM (parseSBOMContent x2)                           runs=10        min=0.6        max=1.5       mean=0.7
+diff (compareSBOMs)                                       runs=10        min=0.1        max=0.5       mean=0.1
+detectorPipeline (runDetectorPipeline, network)            runs=5      min=183.2      max=554.0     mean=276.2
+riskScoring (generateRiskReport('axios'), network, subset of #4)    runs=5      min=107.3      max=110.9     mean=109.4
+merkleBuild (buildSBOMMerkleTree)                         runs=10        min=5.9       max=22.3       mean=8.8
+eip712Signing (signTypedData, sepolia chainId=11155111)   runs=10        min=2.0       max=15.8       mean=4.1
+submitTransaction (submitWithSignature+wait, sepolia chainId=11155111)   runs=10    min=10957.2    max=23256.7   mean=13081.0
+verifyOnChain (verifySBOM view call, sepolia chainId=11155111)   runs=10       min=61.6       max=66.0      mean=63.5
+
+JSON:
+[
+  {
+    "label": "generateSbom (pnpm sbom --lockfile-only)",
+    "min": "607.4",
+    "max": "631.4",
+    "mean": "617.0",
+    "runs": 10
+  },
+  {
+    "label": "parseSBOM (parseSBOMContent x2)",
+    "min": "0.6",
+    "max": "1.5",
+    "mean": "0.7",
+    "runs": 10
+  },
+  {
+    "label": "diff (compareSBOMs)",
+    "min": "0.1",
+    "max": "0.5",
+    "mean": "0.1",
+    "runs": 10
+  },
+  {
+    "label": "detectorPipeline (runDetectorPipeline, network)",
+    "min": "183.2",
+    "max": "554.0",
+    "mean": "276.2",
+    "runs": 5
+  },
+  {
+    "label": "riskScoring (generateRiskReport('axios'), network, subset of #4)",
+    "min": "107.3",
+    "max": "110.9",
+    "mean": "109.4",
+    "runs": 5
+  },
+  {
+    "label": "merkleBuild (buildSBOMMerkleTree)",
+    "min": "5.9",
+    "max": "22.3",
+    "mean": "8.8",
+    "runs": 10
+  },
+  {
+    "label": "eip712Signing (signTypedData, sepolia chainId=11155111)",
+    "min": "2.0",
+    "max": "15.8",
+    "mean": "4.1",
+    "runs": 10
+  },
+  {
+    "label": "submitTransaction (submitWithSignature+wait, sepolia chainId=11155111)",
+    "min": "10957.2",
+    "max": "23256.7",
+    "mean": "13081.0",
+    "runs": 10
+  },
+  {
+    "label": "verifyOnChain (verifySBOM view call, sepolia chainId=11155111)",
+    "min": "61.6",
+    "max": "66.0",
+    "mean": "63.5",
+    "runs": 10
+  }
+]

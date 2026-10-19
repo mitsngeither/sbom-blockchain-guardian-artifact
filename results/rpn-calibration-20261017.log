@@ -1,0 +1,79 @@
+=== [1] Exhaustive enumeration of the RPN score space (policy as run in CI) ===
+
+Combinations (lifecycle x cooldown x typosquat): 60
+Distinct reachable scores                     : 10
+Reachable scores                              : {1, 2, 3, 4, 5, 7, 10, 12, 64, 80}
+
+Score -> rating -> decision, and the combinations that produce it:
+  score=  1  LOW      PASS    (lifecycle=none, S=1 D=1, 1 combinations)
+  score=  2  LOW      PASS    (lifecycle=none, S=1 D=1, 8 combinations)
+  score=  3  LOW      PASS    (lifecycle=none, S=1 D=1, 7 combinations)
+  score=  4  LOW      PASS    (lifecycle=none, S=1 D=1, 4 combinations)
+  score=  5  LOW      PASS    (lifecycle=present, S=3 D=1, 4 combinations)
+  score=  7  LOW      PASS    (lifecycle=present, S=3 D=1, 5 combinations)
+  score= 10  LOW      PASS    (lifecycle=present, S=3 D=1, 7 combinations)
+  score= 12  LOW      PASS    (lifecycle=present, S=3 D=1, 4 combinations)
+  score= 64  HIGH     REVIEW  (lifecycle=suspicious, S=5 D=4, 16 combinations)
+  score= 80  CRITICAL BLOCK   (lifecycle=suspicious, S=5 D=4, 4 combinations)
+
+Largest gap in the score set: (12, 64), 52 points wide, no reachable score inside.
+=> Any threshold inside this gap gives identical decisions. The current LOW/MEDIUM threshold (24) is inside it.
+
+With lifecycle fixed, can cooldown + typosquat change the rating?
+  lifecycle=none        -> reachable ratings: {LOW}   (cannot change)
+  lifecycle=present     -> reachable ratings: {LOW}   (cannot change)
+  lifecycle=suspicious  -> reachable ratings: {HIGH, CRITICAL}   (can change)
+
+
+=== [2] Threshold sweep on the labeled dataset ===
+
+Dataset: test/fixtures/labeled-dataset-primary-eval.json
+Malicious: 400   Benign: 1581
+
+Observed score distribution:
+  score=  1 (LOW     PASS   ): malicious= 160  benign= 1536
+  score=  2 (LOW     PASS   ): malicious=   0  benign=   23
+  score=  3 (LOW     PASS   ): malicious=   0  benign=   20
+  score=  5 (LOW     PASS   ): malicious= 216  benign=    2
+  score=  7 (LOW     PASS   ): malicious=   1  benign=    0
+  score= 10 (LOW     PASS   ): malicious=   1  benign=    0
+  score= 64 (HIGH    REVIEW ): malicious=  22  benign=    0
+
+Which signal produces scores > 1:
+  Has lifecycle hook: malicious 240/400 (60.0%)   benign: 2/1581 (0.13%)
+  Benign flagged by typosquat (score 2-3): 43
+  Benign with hooks: @tailwindcss/oxide@4.1.12, esbuild@0.28.1
+
+  Extrapolation warning: the benign set is the .pnpm tree of this one
+  project. Only 2/1581 packages use an install hook, unusually few compared with
+  npm at large (native/node-gyp packages, esbuild, sharp... all have hooks). The measured FAR
+  is therefore an optimistic lower bound; across npm it would be noticeably higher.
+
+Distinct operating points (thresholds that change the confusion matrix):
+  t      TP    FP     TN    FN  precision   recall       F1      FAR
+  0     400  1581      0     0     20.19%  100.00%   33.60%  100.00%
+  2     240    45   1536   160     84.21%   60.00%   70.07%    2.85%
+  3     240    22   1559   160     91.60%   60.00%   72.51%    1.39%
+  4     240     2   1579   160     99.17%   60.00%   74.77%    0.13%
+  6      24     0   1581   376    100.00%    6.00%   11.32%    0.00%
+  8      23     0   1581   377    100.00%    5.75%   10.87%    0.00%
+  11     22     0   1581   378    100.00%    5.50%   10.43%    0.00%
+  65      0     0   1581   400      0.00%    0.00%    0.00%    0.00%
+
+=> 101 thresholds (t=0..100) give only 8 distinct operating points.
+
+
+=== [3] Ceiling over all thresholds ===
+
+Best F1               : t=4  P=99.17% R=60.00% F1=74.77% FAR=0.13%
+Best recall at FAR=0  : t=6  R=6.00% (FP=0)
+Max recall (any threshold, incl. flag-all) : 100.00% at t=0 with FAR=100.00%
+Max non-degenerate recall : 60.00% at t=2 (FAR=2.85%)
+
+Conclusion: the whole threshold range was swept. Recall does not exceed 60.00% at any threshold.
+The bottleneck is signal generation, not threshold placement (S and D come only from the lifecycle-script check).
+Tuning the threshold cannot fix this; new signals are needed.
+
+Limitation: parts [2]/[3] run with cooldown stubbed (isInCooldown=false for every package,
+since the malicious packages were removed from npm and have no publishedAt). Part [1] enumerates the
+cooldown branches and is not affected.

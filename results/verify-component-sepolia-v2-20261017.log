@@ -1,0 +1,42 @@
+
+{
+  "network": "sepolia chainId=11155111",
+  "contract": "0x32010dD1A7393BA546ba2220FCb6126F160E6CB0",
+  "record": "sbom-blockchain-guardian@1.0.0+9028fbd.38974146992-1",
+  "components": 1216,
+  "proofLength": {
+    "min": 10,
+    "max": 11
+  },
+  "negativeChecks": {
+    "tamperedProof": false,
+    "missingRecord": false
+  },
+  "verifyComponentGasEstimate": {
+    "min": 77583,
+    "max": 81695
+  },
+  "latencyMs": {
+    "verifyComponent view call (RPC)": {
+      "runs": 100,
+      "min": "61.2",
+      "median": "63.4",
+      "max": "109.9",
+      "mean": "64.3"
+    },
+    "verifySBOM view call (RPC)": {
+      "runs": 100,
+      "min": "58.5",
+      "median": "60.8",
+      "max": "98.0",
+      "mean": "61.7"
+    },
+    "verifyComponentProof (local JS)": {
+      "runs": 100,
+      "min": "0.6",
+      "median": "0.8",
+      "max": "1.1",
+      "mean": "0.8"
+    }
+  }
+}

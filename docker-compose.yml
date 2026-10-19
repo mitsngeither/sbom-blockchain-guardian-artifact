@@ -1,0 +1,40 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: sbom-blockchain-guardian-api:latest
+    container_name: sbom-guardian-api
+    restart: unless-stopped
+    ports:
+      - "5006:5006"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NODE_ENV: production
+      BE_PORT: "5006"
+      CHAIN_NAME: ${CHAIN_NAME:-}
+      RPC_URL: ${RPC_URL:-}
+      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:-}
+      CONTRACT_ADDRESS: ${CONTRACT_ADDRESS:-}
+      PROJECT_ID: ${PROJECT_ID:-sbom-blockchain-guardian}
+      SBOM_STORAGE_DIR: /app/apps/api/storage/sboms
+    volumes:
+      - ./apps/api/storage:/app/apps/api/storage
+      - ./pipeline-artifacts:/app/pipeline-artifacts:ro
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: sbom-blockchain-guardian-web:latest
+    container_name: sbom-guardian-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "5440:5440"
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEST_API_URL: http://api:5006

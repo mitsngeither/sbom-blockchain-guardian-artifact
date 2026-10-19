@@ -1,0 +1,399 @@
+name: SBOM Blockchain Guardian Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Read-only: lets publish-history ask which step actually failed, to give a
+  # crashed run a specific reason instead of a generic one.
+  actions: read
+
+jobs:
+  risk-analysis:
+    name: Build, test, generate SBOM, and assess risk
+    runs-on: ubuntu-latest
+    outputs:
+      score: ${{ steps.risk.outputs.score }}
+      rating: ${{ steps.risk.outputs.rating }}
+      decision: ${{ steps.risk.outputs.decision }}
+      analyzed_packages: ${{ steps.risk.outputs.analyzed_packages }}
+      skipped_packages: ${{ steps.risk.outputs.skipped_packages }}
+
+    steps:
+      - name: Checkout current revision
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --prefer-offline
+
+      - name: Run full TypeScript build
+        run: |
+          # 1. Workspace root: build sbom-core, compile Solidity, type-check
+          #    src/, scripts/ and test/. A `--filter` run never includes the
+          #    workspace root, so this must be its own invocation.
+          pnpm run build
+
+          # 2. Shared package + NestJS API (pnpm resolves topological order)
+          pnpm --filter=!"UI SBOM Blockchain Guardian" run build
+
+          # 3. Next.js web app, built in its own context
+          pnpm --filter "UI SBOM Blockchain Guardian" run build
+
+      - name: Run deterministic Phase 4 tests
+        run: pnpm run test:phase4
+
+      - name: Generate current CycloneDX SBOM
+        run: |
+          mkdir -p pipeline-artifacts/sbom pipeline-artifacts/risk pipeline-artifacts/merkle
+          pnpm sbom --sbom-format cyclonedx --lockfile-only \
+            > pipeline-artifacts/sbom/current-bom.json
+
+      - name: Generate SBOM Merkle proof artifact
+        run: |
+          pnpm run sbom:merkle -- \
+            --sbom pipeline-artifacts/sbom/current-bom.json \
+            --out pipeline-artifacts/merkle/current-proof.json
+
+      - name: Resolve baseline revision
+        id: baseline
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          BASE_SHA=""
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA="$PR_BASE_SHA"
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            BASE_SHA="$PUSH_BEFORE_SHA"
+          elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            # Only a successful dispatch records on chain, so its commit is the
+            # last recorded SBOM and the baseline for calling a dependency "new".
+            BASE_SHA="$(gh api \
+              "repos/$REPO/actions/workflows/sbom-blockchain-guardian.yaml/runs?event=workflow_dispatch&status=success&per_page=1" \
+              --jq '.workflow_runs[0].head_sha // empty' || true)"
+          fi
+
+          # Diffing the recorded commit against itself would analyze nothing;
+          # treat a re-dispatch like a missing baseline (strict full scan).
+          ZERO_SHA="0000000000000000000000000000000000000000"
+          if [[ -n "$BASE_SHA" && "$BASE_SHA" != "$ZERO_SHA" && "$BASE_SHA" != "$GITHUB_SHA" ]]; then
+            echo "has_baseline=true" >> "$GITHUB_OUTPUT"
+            echo "baseline_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_baseline=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A baseline that no longer exists (e.g. force-pushed away) must not fail
+      # the run; without previous-bom.json a dispatch falls back to strict mode.
+      - name: Checkout baseline revision
+        id: baseline_checkout
+        continue-on-error: true
+        if: steps.baseline.outputs.has_baseline == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.baseline.outputs.baseline_sha }}
+          path: previous-source
+
+      - name: Generate previous CycloneDX SBOM
+        if: steps.baseline.outputs.has_baseline == 'true' && steps.baseline_checkout.outcome == 'success'
+        run: |
+          pnpm --dir previous-source sbom \
+            --sbom-format cyclonedx \
+            --lockfile-only \
+            > pipeline-artifacts/sbom/previous-bom.json
+
+      - name: Run detector and risk scorer
+        id: risk
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          PREVIOUS_SBOM="none"
+          if [[ -s pipeline-artifacts/sbom/previous-bom.json ]]; then
+            PREVIOUS_SBOM="pipeline-artifacts/sbom/previous-bom.json"
+          fi
+
+          # Without a baseline a dispatch cannot tell new dependencies from
+          # recorded ones, so any dependency still in cooldown blocks it.
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$PREVIOUS_SBOM" == "none" ]]; then
+            export COOLDOWN_STRICT_WITHOUT_BASELINE=true
+          fi
+
+          pnpm run pipeline:risk \
+            pipeline-artifacts/sbom/current-bom.json \
+            "$PREVIOUS_SBOM" \
+            pipeline-artifacts/risk/risk-report.json
+
+      - name: Upload SBOM and risk report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: risk-analysis-artifacts
+          path: pipeline-artifacts
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Policy gate
+        if: always() && steps.risk.outcome == 'success'
+        env:
+          DECISION: ${{ steps.risk.outputs.decision }}
+        run: |
+          if [[ "$DECISION" != "PASS" ]]; then
+            node -e "const r=require('./pipeline-artifacts/risk/risk-report.json'); console.error(r.summary.reasons.join('\n'))"
+            echo "Policy decision is $DECISION; refusing submission."
+            exit 1
+          fi
+          echo "Policy decision is PASS."
+
+  # submit-chain only syncs PASS dispatch runs, so this job publishes run
+  # history for every event. It uses no secrets and does not touch the chain.
+  publish-history:
+    name: Publish run history to the dashboard
+    needs: risk-analysis
+    if: always() && needs.risk-analysis.result != 'cancelled' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, linux, x64, sbom-guardian]
+    env:
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+
+    steps:
+      - name: Check deploy directory
+        # The app checkout the containers bind-mount; kept out of the file so it is not tied to one machine.
+        run: test -n "$DEPLOY_DIR" || { echo "Set the DEPLOY_DIR repository variable"; exit 1; }
+
+      - name: Download analyzed SBOM and risk report
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: risk-analysis-artifacts
+          path: pipeline-artifacts
+
+      - name: Sync run history to the running deployment
+        run: |
+          # No --delete: history accumulates. Only *.json entries are copied,
+          # so a PR artifact cannot bring anything else into the deployment.
+          if [[ -d pipeline-artifacts/risk/history ]]; then
+            DEST="$DEPLOY_DIR/pipeline-artifacts/risk/history"
+            mkdir -p "$DEST"
+            rsync -a --no-links --include='*.json' --exclude='*' \
+              pipeline-artifacts/risk/history/ "$DEST/"
+          else
+            echo "No run history in this artifact; nothing to publish."
+          fi
+
+      # risk-analysis also fails when the policy gate rejects a BLOCK/REVIEW run.
+      # That run already synced a real entry above, so write FAILED only if none exists.
+      - name: Record a FAILED run when risk-analysis crashed
+        if: needs.risk-analysis.result == 'failure'
+        run: |
+          RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [[ -f "$DEST/$RUN_ID.json" ]]; then
+            echo "A real history entry already exists for $RUN_ID -- risk-analysis produced a report and a later step (e.g. the policy gate) is what failed the job. Not overwriting it."
+            exit 0
+          fi
+
+          node -e "
+            const https = require('https');
+            const fs = require('fs');
+
+            function failedStepName() {
+              return new Promise((resolve) => {
+                const req = https.get({
+                  hostname: 'api.github.com',
+                  path: '/repos/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID + '/jobs',
+                  headers: {
+                    Authorization: 'Bearer ' + process.env.GH_TOKEN,
+                    Accept: 'application/vnd.github+json',
+                    'User-Agent': 'sbom-guardian-publish-history',
+                  },
+                }, (res) => {
+                  let data = '';
+                  res.on('data', (chunk) => { data += chunk; });
+                  res.on('end', () => {
+                    try {
+                      const parsed = JSON.parse(data);
+                      const job = (parsed.jobs || []).find(j => j.conclusion === 'failure');
+                      const step = job && job.steps.find(s => s.conclusion === 'failure');
+                      resolve(step ? step.name : null);
+                    } catch {
+                      resolve(null);
+                    }
+                  });
+                });
+                req.on('error', () => resolve(null));
+                req.setTimeout(10000, () => { req.destroy(); resolve(null); });
+              });
+            }
+
+            (async () => {
+              const stepName = await failedStepName();
+              const runId = process.env.GITHUB_RUN_ID + '-' + process.env.GITHUB_RUN_ATTEMPT;
+              const reason = stepName
+                ? 'Failed at step: ' + stepName + '. See the linked CI run for the full log.'
+                : 'risk-analysis crashed before producing a risk report; see the linked CI run for details.';
+              const entry = {
+                runId,
+                commit: (process.env.GITHUB_SHA || '').slice(0, 7),
+                timestamp: new Date().toISOString(),
+                projectId: 'sbom-blockchain-guardian',
+                summary: {
+                  decision: 'FAILED',
+                  reasons: [reason],
+                },
+              };
+              fs.mkdirSync(process.env.DEST, { recursive: true });
+              fs.writeFileSync(process.env.DEST + '/' + runId + '.json', JSON.stringify(entry, null, 2) + '\n');
+            })();
+          "
+        env:
+          # github.token, not a secret: workflow-contract.test.ts allows no
+          # secrets in jobs before submit-chain.
+          GH_TOKEN: ${{ github.token }}
+          DEST: ${{ vars.DEPLOY_DIR }}/pipeline-artifacts/risk/history
+
+      - name: Prune deployment history to the 50 newest entries
+        run: |
+          # Sort by the entry's `timestamp` field, not mtime: rsync -a keeps
+          # the source mtimes, which do not follow run order.
+          DEST="$DEPLOY_DIR/pipeline-artifacts/risk/history"
+          KEEP=50
+
+          if [[ ! -d "$DEST" ]]; then
+            echo "No deployment history directory; nothing to prune."
+            exit 0
+          fi
+
+          COUNT=$(find "$DEST" -maxdepth 1 -name '*.json' -type f | wc -l)
+          if (( COUNT <= KEEP )); then
+            echo "History has $COUNT entries (limit $KEEP); nothing to prune."
+            exit 0
+          fi
+
+          mapfile -t ORDERED < <(
+            for f in "$DEST"/*.json; do
+              ts=$(node -e "
+                try {
+                  const data = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+                  console.log(typeof data.timestamp === 'string' ? data.timestamp : '');
+                } catch {
+                  console.log('');
+                }
+              " "$f")
+              echo "$ts|$f"
+            done | LC_ALL=C sort -t '|' -k1,1
+          )
+
+          PRUNE_COUNT=$(( COUNT - KEEP ))
+          PRUNED=0
+          for entry in "${ORDERED[@]}"; do
+            if (( PRUNED >= PRUNE_COUNT )); then
+              break
+            fi
+            rm -f "${entry#*|}"
+            PRUNED=$(( PRUNED + 1 ))
+          done
+
+          echo "Pruned $PRUNED old history entries; $(( COUNT - PRUNED )) remain."
+
+  submit-chain:
+    name: Sign, submit, and verify on Guardian chain
+    needs: risk-analysis
+    if: >-
+      always() &&
+      needs.risk-analysis.result == 'success' &&
+      needs.risk-analysis.outputs.decision == 'PASS' &&
+      github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, linux, x64, sbom-guardian]
+    env:
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+
+    steps:
+      - name: Check deploy directory
+        # The app checkout the containers bind-mount; kept out of the file so it is not tied to one machine.
+        run: test -n "$DEPLOY_DIR" || { echo "Set the DEPLOY_DIR repository variable"; exit 1; }
+
+      - name: Checkout trusted revision
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --prefer-offline
+
+      - name: Build shared packages and compile contracts
+        run: pnpm run build
+
+      - name: Download analyzed SBOM and risk report
+        uses: actions/download-artifact@v4
+        with:
+          name: risk-analysis-artifacts
+          path: pipeline-artifacts
+
+      - name: Submit PASS report to Guardian chain
+        id: threshold
+        env:
+          CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          SEPOLIA_PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
+          REVIEWER_1_KEY: ${{ secrets.REVIEWER_1_KEY }}
+          REVIEWER_2_KEY: ${{ secrets.REVIEWER_2_KEY }}
+          GITHUB_SHA: ${{ github.sha }}
+          SBOM_PATH: pipeline-artifacts/sbom/current-bom.json
+          RISK_REPORT_PATH: pipeline-artifacts/risk/risk-report.json
+        run: pnpm run pipeline:propose-approve
+
+      # Second recording path for the same PASS report. Runs after the threshold
+      # step because both sign with SEPOLIA_PRIVATE_KEY and would race on the nonce.
+      # SUBMISSION_TAG gives this record its own version and receipt file.
+      - name: Submit the same PASS report via EIP-712 signed submission
+        id: eip712
+        env:
+          CONTRACT_ADDRESS: ${{ secrets.CONTRACT_ADDRESS }}
+          SEPOLIA_RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          SEPOLIA_PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
+          RPC_URL: ${{ secrets.SEPOLIA_RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.SEPOLIA_PRIVATE_KEY }}
+          GITHUB_SHA: ${{ github.sha }}
+          SBOM_PATH: pipeline-artifacts/sbom/current-bom.json
+          RISK_REPORT_PATH: pipeline-artifacts/risk/risk-report.json
+          SUBMISSION_TAG: eip712
+        run: pnpm run pipeline:submit:sepolia
+
+      # The runner's workspace is not the directory docker-compose mounts, so
+      # copy this run's artifacts there. Also runs if only the EIP-712 step failed.
+      - name: Sync pipeline artifacts to the running deployment
+        if: always() && steps.threshold.outcome == 'success'
+        run: |
+          # No --delete: run history lives only in the deploy directory.
+          rsync -a pipeline-artifacts/ "$DEPLOY_DIR/pipeline-artifacts/"

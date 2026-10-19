@@ -1,0 +1,36 @@
+/* Based on https://github.com/tsconfig/bases/blob/501da2bcd640cf95c95805783e1012b992338f28/bases/node22.json */
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "lib": [
+      "es2023"
+    ],
+    "module": "node16",
+    "target": "es2022",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "moduleResolution": "node16",
+    "outDir": "dist"
+  },
+  "include": [
+    "contracts/**/*.ts",
+    "ignition/**/*.ts",
+    "scripts/**/*.ts",
+    "src/**/*.ts",
+    "tasks/**/*.ts",
+    "test/**/*.ts",
+    "hardhat.config.ts",
+    "types/**/*.ts"
+  ],
+  "exclude": [
+    "apps",
+    "artifacts",
+    "cache",
+    "dist",
+    "node_modules",
+    "pipeline-artifacts",
+    "testJS"
+  ]
+}

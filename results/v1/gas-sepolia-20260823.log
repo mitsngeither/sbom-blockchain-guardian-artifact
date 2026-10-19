@@ -1,0 +1,50 @@
+Gas benchmark: 100 runs per function
+Contract: 0x23e493FAaB41152a698eF1Cecf3688842cB0b17C
+======================================================================
+function                runs        min        max         mean
+registerSBOM             100     189579     189615     189606.0
+submitWithSignature      100     203093     220217     203302.8
+proposeSBOM              100     196597     213721     196796.4
+approveSBOM              100      57319      57331      57330.9
+executeProposal          100     209112     209124     209123.9
+revokeVersion            100      36036      36060      36056.6
+
+JSON:
+{
+  "registerSBOM": {
+    "min": "189579",
+    "max": "189615",
+    "mean": "189606.0",
+    "runs": 100
+  },
+  "submitWithSignature": {
+    "min": "203093",
+    "max": "220217",
+    "mean": "203302.8",
+    "runs": 100
+  },
+  "proposeSBOM": {
+    "min": "196597",
+    "max": "213721",
+    "mean": "196796.4",
+    "runs": 100
+  },
+  "approveSBOM": {
+    "min": "57319",
+    "max": "57331",
+    "mean": "57330.9",
+    "runs": 100
+  },
+  "executeProposal": {
+    "min": "209112",
+    "max": "209124",
+    "mean": "209123.9",
+    "runs": 100
+  },
+  "revokeVersion": {
+    "min": "36036",
+    "max": "36060",
+    "mean": "36056.6",
+    "runs": 100
+  }
+}

@@ -1,0 +1,25 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+supportedArchitectures:
+  os:
+    - linux
+  cpu:
+    - x64
+  libc:
+    - glibc
+# Refuse packages published less than 7 days ago (in minutes).
+minimumReleaseAge: 10080
+fetchTimeout: 120000
+fetchRetries: 2
+fetchRetryFactor: 2
+fetchRetryMintimeout: 10000
+fetchRetryMaxtimeout: 30000
+networkConcurrency: 8
+allowBuilds:
+  '@tailwindcss/oxide': true
+  esbuild: true
+  libxmljs2: true
+  sharp: true
+  unrs-resolver: true
