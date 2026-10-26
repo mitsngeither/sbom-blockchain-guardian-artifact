@@ -73,11 +73,11 @@ pnpm hardhat run scripts/benchmark-gas-stats.ts --network sepolia
 pnpm hardhat run scripts/benchmark-latency.ts --network sepolia
 pnpm hardhat run scripts/benchmark-verify-component.ts --network sepolia
 
-pnpm exec tsx scripts/measure-scale-real.ts                                      # sbom1.json, 1,215 components
-pnpm exec tsx scripts/measure-scale-real.ts test/sboms/sbom-v2-added-axios.json  # 25 components
-pnpm exec tsx scripts/measure-scale.ts
+npx tsx scripts/measure-scale-real.ts                                      # sbom1.json, 1,215 components
+npx tsx scripts/measure-scale-real.ts test/sboms/sbom-v2-added-axios.json  # 25 components
+npx tsx scripts/measure-scale.ts
 
-DATASET_FILE=test/fixtures/labeled-dataset-primary-eval.json pnpm exec tsx scripts/calibrate-rpn-thresholds.ts
+DATASET_FILE=test/fixtures/labeled-dataset-primary-eval.json npx tsx scripts/calibrate-rpn-thresholds.ts
 ```
 
 The gas and latency scripts deploy a fresh contract on every run, so the addresses in their logs differ from the one in the Overview. `benchmark-verify-component.ts` only makes `eth_call` requests and costs no gas. `results/README.md` explains where each log came from.
@@ -89,7 +89,7 @@ The `VAR=value command` syntax above works in bash/zsh. On Windows, set the vari
 The labeled set (400 malicious and 1,581 benign npm packages) is not in this repository, because the malicious part contains live malware.
 
 - Malicious: sampled from DataDog's [malicious-software-packages-dataset](https://github.com/DataDog/malicious-software-packages-dataset) with `scripts/build-frozen-holdout.ts`. Point `DATASET_DIR` at the dataset's `samples/npm` directory. The script uses seed 90210 unless `SEED` is set. It also skips any package named in `test/fixtures/labeled-dataset.json` (the earlier development set, not publishh sets were merged into `test/fixtures/labeled-dataset-primary-eval.json` for bash
-DATASET_FILE=test/fixtures/labeled-dataset-primary-eval.json pnpm exec tsx scripts/evaluate-detector-ablation.ts
+DATASET_FILE=test/fixtures/labeled-dataset-primary-eval.json npx tsx scripts/evaluate-detector-ablation.ts
 ```
 
 The paper reports the `Baseline` row, which is the rule set CI actually runs: TP=22, FP=0, TN=1581, FN=378 (precision 1.00, recall 0.055). The other rows are offline experiments and are not part of the pipeline.
