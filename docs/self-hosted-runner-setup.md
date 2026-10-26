@@ -4,8 +4,10 @@
 > the workflow was set up when it ran for the paper. To run it elsewhere, set
 > the `DEPLOY_DIR` variable below to your own deployment path.
 
-The `submit-chain` job in `.github/workflows/sbom-blockchain-guardian.yaml`
-runs on a self-hosted runner (label sbom-guardian) because it writes chain receipts and run history into the dashboard deployment on that host.
+The `publish-history` and `submit-chain` jobs in
+`.github/workflows/sbom-blockchain-guardian.yaml` run on a self-hosted runner
+(label `sbom-guardian`) because they write run history and chain receipts into
+the dashboard deployment on that host.
 
 ## Register the runner
 
@@ -22,7 +24,7 @@ runs on a self-hosted runner (label sbom-guardian) because it writes chain recei
 ## Required repository secrets
 
 Set these under **Settings > Secrets and variables > Actions**. Never commit
-any of these values to the repo — a key in git is a key that leaks, even a
+any of these values to the repo. A key in git is a key that leaks, even a
 throwaway testnet one.
 
 | Secret | Purpose |
@@ -41,7 +43,7 @@ One repository **variable** (the Variables tab, not a secret):
 
 ## Local development
 
-For local/offline work without spending real Sepolia ETH, the `devnet`
+For local/offline work without spending Sepolia ETH, the `devnet`
 network points at a local Geth dev chain instead:
 
 ```bash
@@ -51,4 +53,4 @@ pnpm hardhat run scripts/deploy.ts --network devnet
 ```
 
 `hardhat.config.ts` reads this key from `process.env.DEVNET_PRIVATE_KEY` at
-runtime — the network still resolves without it, it just has no signer.
+runtime. Without it the network still resolves but has no signer.
