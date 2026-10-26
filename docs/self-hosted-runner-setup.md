@@ -5,8 +5,7 @@
 > the `DEPLOY_DIR` variable below to your own deployment path.
 
 The `submit-chain` job in `.github/workflows/sbom-blockchain-guardian.yaml`
-runs on a self-hosted runner (label `sbom-guardian`) because it needs access
-to blockchain signing keys that must never leave this host.
+runs on a self-hosted runner (label sbom-guardian) because it writes chain receipts and run history into the dashboard deployment on that host.
 
 ## Register the runner
 
