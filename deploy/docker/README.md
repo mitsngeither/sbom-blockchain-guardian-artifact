@@ -12,7 +12,7 @@ The blockchain node and the CI runner are not part of it.
 ```bash
 docker compose build
 docker compose up -d
-# Restart only the web service after changing the web image:
+# Rebuild and restart only the web service:
 # docker compose up -d --build web
 docker compose ps
 ```
@@ -35,9 +35,12 @@ export CHAIN_NAME=Sepolia
 docker compose up -d
 ```
 
-For a local Geth chain set `RPC_URL` and leave `SEPOLIA_RPC_URL` unset (it takes precedence).
+For a local Geth chain set `RPC_URL` and leave `SEPOLIA_RPC_URL` unset (it
+takes precedence).
 
-If the node runs on the same machine, `127.0.0.1` inside the container is the container, not the host. Use `http://host.docker.internal:8545` (Compose already maps it) or the host's LAN IP.
+If the node runs on the same machine, `127.0.0.1` inside the container is the
+container, not the host. Use `http://host.docker.internal:8545` (Compose
+already maps it) or the host's LAN IP.
 
 ## Persistent artifacts
 
